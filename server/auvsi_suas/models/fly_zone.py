@@ -86,7 +86,7 @@ class FlyZone(models.Model):
             polygon_test_points))
         for test_id in range(len(polygon_test_point_ids)):
             cur_id = polygon_test_point_ids[test_id]
-            results[cur_id] = (polygon_test_results[test_id] == True)
+            results[cur_id] = polygon_test_results[test_id]
 
         return results
 
