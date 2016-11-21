@@ -123,7 +123,11 @@ class FlyZone(models.Model):
                                   if not satisfied_positions[cur_id]]
 
         # Positions that remain are out of bound positions, compute total time
+        DEBOUNCE_SECONDS = 0
         total_time = 0
+        num_violations = 0
+        current_streak = 0
+        prev_id = -1
         for cur_id in log_ids_to_process:
             # Ignore first ID position as no start time for comparison
             if cur_id == 0:
@@ -134,8 +138,19 @@ class FlyZone(models.Model):
             prev_log = uas_telemetry_logs[cur_id - 1]
             time_diff = (
                 cur_log.timestamp - prev_log.timestamp).total_seconds()
-            total_time += time_diff
 
+            if prev_id == (cur_id - 1):
+                current_streak += time_diff
+            else:
+                if current_streak > DEBOUNCE_SECONDS:
+                    total_time += current_streak
+                    num_violations += 1
+                current_streak = time_diff
+            prev_id = cur_id
+
+        if current_streak > DEBOUNCE_SECONDS:
+            total_time += current_streak
+            num_violations += 1
         return total_time
 
     @classmethod
