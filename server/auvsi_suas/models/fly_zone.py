@@ -100,8 +100,9 @@ class FlyZone(models.Model):
             uas_telemetry_logs: A list of UasTelemetry logs sorted by timestamp
                 which demonstrate the flight of the UAS.
         Returns:
-            The floating point total time in seconds spent out of bounds as
-            indicated by the telemetry logs.
+            num_violations: The number of times fly zone boundaries violated.
+            total_time: The floating point total time in seconds spent out of
+                bounds as indicated by the telemetry logs.
         """
         # Get the aerial positions for the logs
         aerial_pos_list = [cur_log.uas_position
@@ -123,37 +124,32 @@ class FlyZone(models.Model):
                                   for cur_id in range(len(log_ids_to_process))
                                   if not satisfied_positions[cur_id]]
 
-        # Positions that remain are out of bound positions, compute total time
-        total_time = 0
-        num_violations = 0
-        current_streak = 0
-        prev_id = -1
-        for cur_id in log_ids_to_process:
-            print 'cur_id: ' + str(cur_id) + ', prev_id: ' + str(prev_id) + ', current_streak: ' + str(current_streak) + ', total_time: ' + str(total_time)
-            # Ignore first ID position as no start time for comparison
-            if cur_id == 0:
-                continue
-            # Track time between previous and current out of bounds. This is a
-            # simplification of time spent out of bounds.
-            cur_log = uas_telemetry_logs[cur_id]
-            prev_log = uas_telemetry_logs[cur_id - 1]
-            time_diff = (
-                cur_log.timestamp - prev_log.timestamp).total_seconds()
+        out_of_bounds_time = 0
+        violations = 0
+        prev_event_id = -1
+        currently_in_bounds = True
+        for i in range(len(aerial_pos_list)):
+            i_in_bounds = i not in log_ids_to_process
+            if currently_in_bounds and not i_in_bounds:
+                # As soon as there is one telemetry log out of bounds, we count
+                # it as a violation.
+                currently_in_bounds = False
+                violations += 1
+                prev_event_id = i
+            elif not currently_in_bounds and i_in_bounds:
+                # A switch of state needs to happen. But first make sure
+                # enough time has passed.
+                time_diff = (uas_telemetry_logs[i].timestamp -
+                             uas_telemetry_logs[prev_event_id].timestamp)
+                if time_diff.total_seconds() >= settings.DEBOUNCE_INTERVAL:
+                    currently_in_bounds = True
 
-            if prev_id == (cur_id - 1):
-                current_streak += time_diff
-            else:
-                if current_streak >= settings.DEBOUNCE_INTERVAL:
-                    total_time += current_streak
-                    num_violations += 1
-                current_streak = time_diff
-            prev_id = cur_id
+            if not currently_in_bounds and i > 0:
+                time_diff = (uas_telemetry_logs[i].timestamp -
+                             uas_telemetry_logs[i - 1].timestamp)
+                out_of_bounds_time += time_diff.total_seconds()
 
-        if current_streak >= settings.DEBOUNCE_INTERVAL:
-            total_time += current_streak
-            num_violations += 1
-
-        return total_time
+        return (violations, out_of_bounds_time)
 
     @classmethod
     def kml_all(cls, kml):

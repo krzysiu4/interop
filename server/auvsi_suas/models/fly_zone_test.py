@@ -117,31 +117,50 @@ TESTDATA_FLYZONE_CONTAINSPOS = [
 ]
 
 # ((alt_min, alt_max, [fly_zone_waypoints]),
-#  [(uas_out_bounds_time, [uas_logs])])
+#  [(uas_num_boundary_violations, uas_out_bounds_time, [uas_logs])])
 TESTDATA_FLYZONE_EVALBOUNDS = (
     [(0, 100, [(38, -76), (39, -76), (39, -77), (38, -77)]),
      (100, 700, [(38, -76), (39, -76), (39, -77), (38, -77)])
      ],
-    [(0.0,
+     [(0,
+      0.0,
       [(38.5, -76.5, 50, 0), (38.5, -76.5, 50, 1.0)]),
-     (1.0,
+     (1,
+      1.0,
       [(38.5, -76.5, 50, 0), (40, -76.5, 50, 1.0)]),
-     (2.0,
+     (1,
+      2.0,
       [(38.5, -76.5, 50, 0), (40, -76.5, 50, 1.0), (41, -76.5, 50, 2.0)]),
-     (3.0,
+     (3,
+      3.0,
       [(38.5, -76.5, 50, 0),
        (40, -76, 50, 1.0),
        (38.5, -76.5, 100, 2.0),
        (38.5, -76.5, 800, 3.0),
        (38.5, -76.5, 600, 4.0),
        (38.5, -78, 100, 5.0)]),
-     (1.0,
+     (1,
+      1.25,
       [(38.5, -76.5, 700, 0),
-       (38.5, -76.5, 750, 0.5),
+       (38.5, -76.5, 750, 0.25),
+       (38.5, -76.5, 700, 0.5),
+       (38.5, -76.5, 650, 0.6),
+       (38.5, -76.5, 800, 0.75),
+       (38.5, -76.5, 800, 1.0),
+       (38.5, -76.5, 800, 1.25),
+       (38.5, -76.5, 650, 1.5)]),
+     (2,
+      1.5,
+      [(38.5, -76.5, 700, 0),
+       (38.5, -76.5, 800, 1.0),
+       (38.5, -76.5, 700, 2.0),
+       (38.5, -76.5, 750, 2.5)]),
+     (1,
+      1.0,
+      [(38.5, -76.5, 700, 0),
+       (38.5, -76.5, 800, 0.5),
        (38.5, -76.5, 700, 1.0),
-       (38.5, -76.5, 800, 1.5),
-       (38.5, -76.5, 800, 2.0),
-       (38.5, -76.5, 650, 2.5),])
+       (38.5, -76.5, 500, 2.0)])
      ]
 )  # yapf: disable
 
@@ -273,13 +292,13 @@ class TestFlyZone(TestCase):
                                        minute=0,
                                        second=0,
                                        microsecond=0)
-        for exp_out_of_bounds_time, uas_log_details in uas_details:
+        for exp_violations, exp_out_of_bounds_time, log_details in uas_details:
             # Create the logs
             user = User.objects.create_user('testuser%d' % user_id,
                                             'testemail@x.com', 'testpass')
             user_id += 1
             uas_logs = []
-            for (lat, lon, alt, timestamp) in uas_log_details:
+            for (lat, lon, alt, timestamp) in log_details:
                 gpos = GpsPosition()
                 gpos.latitude = lat
                 gpos.longitude = lon
@@ -297,5 +316,7 @@ class TestFlyZone(TestCase):
                 log.save()
                 uas_logs.append(log)
             # Assert out of bounds time matches expected
-            out_of_bounds_time = FlyZone.out_of_bounds(zones, uas_logs)
+            num_violations, out_of_bounds_time = \
+                FlyZone.out_of_bounds(zones, uas_logs)
+            self.assertEqual(num_violations, exp_violations)
             self.assertAlmostEqual(out_of_bounds_time, exp_out_of_bounds_time)
