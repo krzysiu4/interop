@@ -58,8 +58,8 @@ class TestClient(unittest.TestCase):
     def setUp(self):
         """Create a logged in Client."""
         # Create an admin client to clear cache.
-        client = Client(server, admin_username, admin_password)
-        client.get('/api/clear_cache')
+        self.admin_client = Client(server, admin_username, admin_password)
+        self.admin_client.get('/api/clear_cache')
 
         # Test rest with non-admin clients.
         self.client = Client(server, username, password)
@@ -218,3 +218,12 @@ class TestClient(unittest.TestCase):
         self.assertNotIn(post_target, self.client.get_targets())
         self.assertNotIn(async_post_target,
                          self.async_client.get_targets().result())
+
+    def test_targets_admin(self):
+        target = Target(type='standard')
+
+        # Fails if not superuser.
+        with self.assertRaises(InteropError):
+            post_target = self.client.post_target(target)
+
+        self.admin_client.post_target(target)
