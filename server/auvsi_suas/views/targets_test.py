@@ -358,6 +358,59 @@ class TestPostTarget(TestCase):
                                         content_type='application/json')
             self.assertEqual(400, response.status_code)
 
+    def test_actionable_override_unauthorized(self):
+        """Setting actionable_override if not superuser fails."""
+        target = {'type': 'standard', 'actionable_override': True}
+
+        # Post fails if not superuser.
+        response = self.client.post(targets_url,
+                                    data=json.dumps(target),
+                                    content_type='application/json')
+        self.assertEqual(403, response.status_code)
+
+    def test_actionable_override(self):
+        """Set actionable_override in POST."""
+        target = {'type': 'standard', 'actionable_override': True}
+
+        # Login as super user.
+        admin_user = User.objects.create_superuser(
+            'adminuser', 'adminemail@x.com', 'adminpass')
+        response = self.client.post(login_url, {
+            'username': 'adminuser',
+            'password': 'adminpass'
+        })
+        self.assertEqual(200, response.status_code)
+
+        # Post succeeds if superuser.
+        response = self.client.post(targets_url,
+                                    data=json.dumps(target),
+                                    content_type='application/json')
+        self.assertEqual(201, response.status_code)
+
+        # Check that returned target has actionable_override set.
+        created = json.loads(response.content)
+        self.assertEqual(True, created['actionable_override'])
+
+    def test_actionable_override_invalid(self):
+        """Send bad target actionable_override."""
+        bad = ['true', 1, 'Yes']
+
+        # Login as super user.
+        admin_user = User.objects.create_superuser(
+            'adminuser', 'adminemail@x.com', 'adminpass')
+        response = self.client.post(login_url, {
+            'username': 'adminuser',
+            'password': 'adminpass'
+        })
+        self.assertEqual(200, response.status_code)
+
+        for b in bad:
+            target = {'type': 'standard', 'actionable_override': b}
+            response = self.client.post(targets_url,
+                                        data=json.dumps(target),
+                                        content_type='application/json')
+            self.assertEqual(400, response.status_code)
+
 
 class TestTargetsIdLoggedOut(TestCase):
     """Tests logged out targets_id."""
@@ -601,6 +654,43 @@ class TestTargetId(TestCase):
 
         t.refresh_from_db()
         self.assertEqual(True, t.autonomous)
+
+    def test_put_actionable_override_unauthorized(self):
+        """Changing actionable_override if not superuser fails."""
+        t = Target(user=self.user, target_type=TargetType.standard)
+        t.save()
+
+        data = {'actionable_override': True}
+
+        # Put fails if not superuser.
+        response = self.client.put(targets_id_url(args=[t.pk]),
+                                   data=json.dumps(data))
+        self.assertEqual(403, response.status_code)
+
+    def test_actionable_override(self):
+        """Change actionable_override with PUT."""
+        t = Target(user=self.user, target_type=TargetType.standard)
+        t.save()
+
+        data = {'actionable_override': True}
+
+        # Login as super user.
+        admin_user = User.objects.create_superuser(
+            'adminuser', 'adminemail@x.com', 'adminpass')
+        response = self.client.post(login_url, {
+            'username': 'adminuser',
+            'password': 'adminpass'
+        })
+        self.assertEqual(200, response.status_code)
+
+        # Put succeeds if superuser.
+        response = self.client.put(targets_id_url(args=[t.pk]),
+                                   data=json.dumps(data))
+        self.assertEqual(200, response.status_code)
+
+        # Check that target has actionable_override set.
+        t.refresh_from_db()
+        self.assertEqual(True, t.actionable_override)
 
     def test_delete_own(self):
         """Test DELETEing a target owned by the correct user."""
